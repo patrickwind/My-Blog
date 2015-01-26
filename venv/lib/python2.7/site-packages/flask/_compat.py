@@ -7,7 +7,7 @@
     version of six so we don't have to depend on a specific version
     of it.
 
-    :copyright: (c) 2013 by Armin Ronacher.
+    :copyright: (c) 2015 by Armin Ronacher.
     :license: BSD, see LICENSE for more details.
 """
 import sys
@@ -19,7 +19,7 @@ _identity = lambda x: x
 if not PY2:
     text_type = str
     string_types = (str,)
-    integer_types = (int, )
+    integer_types = (int,)
 
     iterkeys = lambda d: iter(d.keys())
     itervalues = lambda d: iter(d.values())
@@ -71,3 +71,27 @@ def with_metaclass(meta, *bases):
                 return type.__new__(cls, name, (), d)
             return meta(name, bases, d)
     return metaclass('temporary_class', None, {})
+
+
+# Certain versions of pypy have a bug where clearing the exception stack
+# breaks the __exit__ function in a very peculiar way.  This is currently
+# true for pypy 2.2.1 for instance.  The second level of exception blocks
+# is necessary because pypy seems to forget to check if an exception
+# happened until the next bytecode instruction?
+BROKEN_PYPY_CTXMGR_EXIT = False
+if hasattr(sys, 'pypy_version_info'):
+    class _Mgr(object):
+        def __enter__(self):
+            return self
+        def __exit__(self, *args):
+            sys.exc_clear()
+    try:
+        try:
+            with _Mgr():
+                raise AssertionError()
+        except:
+            raise
+    except TypeError:
+        BROKEN_PYPY_CTXMGR_EXIT = True
+    except AssertionError:
+        pass

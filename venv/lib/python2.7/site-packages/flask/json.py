@@ -5,12 +5,12 @@
 
     Implementation helpers for the JSON support in Flask.
 
-    :copyright: (c) 2012 by Armin Ronacher.
+    :copyright: (c) 2015 by Armin Ronacher.
     :license: BSD, see LICENSE for more details.
 """
 import io
 import uuid
-from datetime import datetime
+from datetime import date
 from .globals import current_app, request
 from ._compat import text_type, PY2
 
@@ -25,7 +25,7 @@ except ImportError:
     from itsdangerous import json as _json
 
 
-# figure out if simplejson escapes slashes.  This behavior was changed
+# Figure out if simplejson escapes slashes.  This behavior was changed
 # from one version to another without reason.
 _slash_escape = '\\/' not in _json.dumps('/')
 
@@ -60,7 +60,7 @@ class JSONEncoder(_json.JSONEncoder):
     def default(self, o):
         """Implement this method in a subclass such that it returns a
         serializable object for ``o``, or calls the base implementation (to
-        raise a ``TypeError``).
+        raise a :exc:`TypeError`).
 
         For example, to support arbitrary iterators, you could implement
         default like this::
@@ -74,8 +74,8 @@ class JSONEncoder(_json.JSONEncoder):
                     return list(iterable)
                 return JSONEncoder.default(self, o)
         """
-        if isinstance(o, datetime):
-            return http_date(o)
+        if isinstance(o, date):
+            return http_date(o.timetuple())
         if isinstance(o, uuid.UUID):
             return str(o)
         if hasattr(o, '__html__'):
@@ -119,7 +119,7 @@ def dumps(obj, **kwargs):
     This function can return ``unicode`` strings or ascii-only bytestrings by
     default which coerce into unicode strings automatically.  That behavior by
     default is controlled by the ``JSON_AS_ASCII`` configuration variable
-    and can be overriden by the simplejson ``ensure_ascii`` parameter.
+    and can be overridden by the simplejson ``ensure_ascii`` parameter.
     """
     _dump_arg_defaults(kwargs)
     encoding = kwargs.pop('encoding', None)
@@ -200,8 +200,9 @@ def htmlsafe_dump(obj, fp, **kwargs):
 
 def jsonify(*args, **kwargs):
     """Creates a :class:`~flask.Response` with the JSON representation of
-    the given arguments with an `application/json` mimetype.  The arguments
-    to this function are the same as to the :class:`dict` constructor.
+    the given arguments with an :mimetype:`application/json` mimetype.  The
+    arguments to this function are the same as to the :class:`dict`
+    constructor.
 
     Example usage::
 
@@ -227,16 +228,27 @@ def jsonify(*args, **kwargs):
     This function's response will be pretty printed if it was not requested
     with ``X-Requested-With: XMLHttpRequest`` to simplify debugging unless
     the ``JSONIFY_PRETTYPRINT_REGULAR`` config parameter is set to false.
+    Compressed (not pretty) formatting currently means no indents and no
+    spaces after separators.
 
     .. versionadded:: 0.2
     """
+
     indent = None
+    separators = (',', ':')
+
     if current_app.config['JSONIFY_PRETTYPRINT_REGULAR'] \
-        and not request.is_xhr:
+       and not request.is_xhr:
         indent = 2
-    return current_app.response_class(dumps(dict(*args, **kwargs),
-        indent=indent),
+        separators = (', ', ': ')
+
+    # Note that we add '\n' to end of response
+    # (see https://github.com/mitsuhiko/flask/pull/1262)
+    rv = current_app.response_class(
+        (dumps(dict(*args, **kwargs), indent=indent, separators=separators),
+         '\n'),
         mimetype='application/json')
+    return rv
 
 
 def tojson_filter(obj, **kwargs):

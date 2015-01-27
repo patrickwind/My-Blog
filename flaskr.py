@@ -27,10 +27,11 @@ def connect_db():
 
 def init_db():
     """Initializes the database."""
-    db = get_db()
-    with app.open_resource('schema.sql', mode='r') as f:
-        db.cursor().executescript(f.read())
-    db.commit()
+    with app.app_context():
+    	db = get_db()
+    	with app.open_resource('schema.sql', mode='r') as f:
+    	    db.cursor().executescript(f.read())
+    	db.commit()
 
 
 @app.cli.command('initdb')
